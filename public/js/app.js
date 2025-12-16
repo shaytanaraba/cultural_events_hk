@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeTheme();
     checkAuthStatus();
     setupEventListeners();
+    loadAndRenderLastUpdated();
 });
 
 function showToast(message, type = 'info') {
@@ -74,20 +75,25 @@ function checkAuthStatus() {
 function showUserInterface(userData) {
     currentUser = userData;
 
-    document.getElementById('loginLink').classList.add('hidden');
-    document.getElementById('userInfo').classList.remove('hidden');
+    document.getElementById('loginLink')?.classList.add('hidden');
+    document.getElementById('userInfo')?.classList.remove('hidden');
     document.getElementById('username').textContent = userData.username;
 
-    document.getElementById('venuesLink').classList.remove('hidden');
-    document.getElementById('mapLink').classList.remove('hidden');
-    document.getElementById('favoritesLink').classList.remove('hidden');
-    if (userData.isAdmin) {
-        document.getElementById('adminLink').classList.remove('hidden');
+    document.getElementById('venuesLink')?.classList.remove('hidden');
+    document.getElementById('mapLink')?.classList.remove('hidden');
+    document.getElementById('favoritesLink')?.classList.remove('hidden');
+    if (userData.isAdmin) document.getElementById('adminLink')?.classList.remove('hidden');
+
+    // Hide login page
+    const loginPage = document.getElementById('loginPage');
+    if (loginPage) {
+        loginPage.classList.remove('active');
+        loginPage.classList.add('hidden');
+        loginPage.style.display = 'none';
     }
 
-    // Respect the current hash if present; otherwise default to venues
-    const initialPage = (location.hash && location.hash.substring(1)) || 'venues';
-    showPage(initialPage);
+    const target = (location.hash && location.hash.substring(1)) || 'venues';
+    showPage(target);
 }
 
 function setupEventListeners() {
@@ -103,6 +109,7 @@ function setupEventListeners() {
     document.getElementById('distanceFilter').addEventListener('input', filterVenues);
 }
 
+// Ensure login() hides the form after success
 function login() {
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('password').value;
@@ -110,15 +117,19 @@ function login() {
     
     fetch('/api/login', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
     })
     .then(response => response.json())
     .then(data => {
         if (data.message) {
+            // Build UI and hide login
             showUserInterface(data.user);
+
+            // Force navigation to Venues (ignore existing hash)
+            showPage('venues');
+            updateHistory('venues');
+
             errorDiv.classList.add('hidden');
         } else {
             errorDiv.textContent = data.error || 'Login failed';
@@ -150,53 +161,33 @@ function logout() {
 }
 
 // Page Navigation
-function showPage(pageId, addToHistory = true) { // Add boolean param
-    // Hide all pages
-    document.querySelectorAll('.page').forEach(page => {
-        page.classList.remove('active');
+// Make page switching deterministic
+function showPage(pageId, addToHistory = true) {
+    const pages = document.querySelectorAll('.page');
+    pages.forEach(p => {
+        p.classList.add('hidden');
+        p.classList.remove('active');
+        p.style.display = 'none';
     });
 
-    // Show selected page
-    const pageEl = document.getElementById(pageId + 'Page');
-    if(pageEl) {
-        pageEl.classList.add('active');
-    } else {
-        console.error("Page not found:", pageId);
-        return; 
+    const targetEl = document.getElementById(pageId + 'Page') || document.getElementById(pageId);
+    if (targetEl) {
+        targetEl.classList.remove('hidden');
+        targetEl.classList.add('active');
+        targetEl.style.display = 'block';
     }
 
-    // Update nav links
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.remove('active');
-        if (link.getAttribute('href') === '#' + pageId) {
-            link.classList.add('active');
-        }
-    });
-    
-    // Handle History API
-    if (addToHistory) {
-        const state = { page: pageId };
-        // Clean URL: /venues instead of /#venues (looks more professional)
-        // Or keep hash if you prefer, but pushState is key.
-        history.pushState(state, '', `#${pageId}`); 
-    }
+    if (addToHistory) history.pushState({ page: pageId }, '', `#${pageId}`);
 
-    // Load page-specific data
-    switch(pageId) {
-        case 'venues':
-            loadVenues();
-            break;
-        case 'map':
-            loadMap();
-            break;
-        case 'favorites':
-            loadFavorites();
-            break;
-        case 'admin':
-            if (currentUser.isAdmin) {
-                loadAdminData();
-            }
-            break;
+    if (pageId === 'venues') {
+        loadVenues();
+        loadAndRenderLastUpdated();
+    }
+    if (pageId === 'map') loadMap();
+    if (pageId === 'favorites') loadFavorites();
+    if (pageId === 'admin' && currentUser?.isAdmin) showAdminTab('users');
+    if (pageId === 'venues' || pageId === 'events') {
+        loadAndRenderLastUpdated();
     }
 }
 
@@ -222,52 +213,75 @@ function loadVenues() {
         });
 }
 function displayVenues(venuesToDisplay) {
-    const tbody = document.getElementById('venuesTableBody');
-    tbody.innerHTML = '';
-    
-    if (venuesToDisplay.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4">No venues found matching your criteria.</td></tr>';
-        return;
-    }
-    
-    venuesToDisplay.forEach(venue => {
-        const row = document.createElement('tr');
-        
-        // FIX: Add click event to the ROW
-        row.onclick = () => showVenueDetail(venue._id);
-        
-        const distance = userLocation && venue.latitude && venue.longitude 
-            ? calculateDistance(userLocation.lat, userLocation.lng, venue.latitude, venue.longitude)
-            : null;
-        
-        // CHECK LIKE STATUS
-        const userId = currentUser ? (currentUser.userId || currentUser.user?.userId) : null;
-        const isLiked = userId && venue.likes && venue.likes.includes(userId);
-        const likeClass = isLiked ? 'liked' : '';
-        const likeCount = venue.likes ? venue.likes.length : 0;
-        
-        // FIX: Removed <a> tag, used text only.
-        // FIX: Added event.stopPropagation()
-        // FIX: Added ${likeClass} to the button
-        row.innerHTML = `
-            <td>
-                <span class="venue-name-text" style="font-weight: 600; color: var(--primary-color);">${venue.name}</span>
-            </td>
-            <td>${distance ? distance.toFixed(2) + ' km' : 'N/A'}</td>
-            <td>${venue.events ? venue.events.length : 0}</td>
-            <td>
-                <div class="flex gap-2 align-center">
-                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); showVenueDetail('${venue._id}')">
-                        View
-                    </button>
-                    <button class="like-btn ${likeClass}" onclick="event.stopPropagation(); toggleLikeVenue(event, '${venue._id}')">
-                        <i class="fas fa-heart"></i> <span class="like-count">${likeCount}</span>
-                    </button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(row);
-    });
+  const tbody = document.getElementById('venuesTableBody');
+  tbody.innerHTML = '';
+
+  if (!Array.isArray(venuesToDisplay) || venuesToDisplay.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4">No venues found matching your criteria.</td></tr>';
+    return;
+  }
+
+  // Current user id for liked state
+  const userId = currentUser ? (currentUser.userId || currentUser.user?.userId) : null;
+
+  venuesToDisplay.forEach(venue => {
+    const row = document.createElement('tr');
+    row.onclick = () => showVenueDetail(venue._id);
+
+    // ID
+    const idCell = document.createElement('td');
+    idCell.textContent = venue.venueId || '-';
+    row.appendChild(idCell);
+
+    // Name (bold + blue)
+    const nameCell = document.createElement('td');
+    nameCell.textContent = venue.name || '';
+    nameCell.className = 'venue-name';
+    row.appendChild(nameCell);
+
+    // Distance
+    const distanceCell = document.createElement('td');
+    const distance = (userLocation && venue.latitude && venue.longitude)
+      ? calculateDistance(userLocation.lat, userLocation.lng, venue.latitude, venue.longitude)
+      : null;
+    distanceCell.textContent = distance != null ? `${distance.toFixed(1)} km` : '—';
+    row.appendChild(distanceCell);
+
+    // Events count
+    const eventsCell = document.createElement('td');
+    const count = Array.isArray(venue.events) ? venue.events.length : 0;
+    eventsCell.textContent = count;
+    row.appendChild(eventsCell);
+
+    // Actions (View + Like)
+    const actionsCell = document.createElement('td');
+    actionsCell.classList.add('actions-cell'); // flex row
+    actionsCell.style.whiteSpace = 'nowrap';
+
+    // View button (left)
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'btn btn-secondary btn-sm';
+    viewBtn.textContent = 'View';
+    viewBtn.onclick = (e) => { e.stopPropagation(); showVenueDetail(venue._id); };
+    actionsCell.appendChild(viewBtn);
+
+    // Like button (right)
+    const likeBtn = document.createElement('button');
+    const likeCount = Array.isArray(venue.likes) ? venue.likes.length : (typeof venue.likes === 'number' ? venue.likes : 0);
+    const isLiked = userId && Array.isArray(venue.likes) && venue.likes.includes(userId);
+    likeBtn.className = `like-btn ${isLiked ? 'liked' : ''}`;
+    likeBtn.innerHTML = `<i class="fas fa-heart"></i> <span class="like-count">${likeCount}</span>`;
+    likeBtn.onclick = (e) => { toggleLikeVenue(e, venue._id); };
+    actionsCell.appendChild(likeBtn);
+
+    row.appendChild(actionsCell);
+
+    tbody.appendChild(row);
+  });
+
+  // Reveal table, hide loading
+  document.getElementById('venuesTable')?.classList.remove('hidden');
+  document.getElementById('venuesLoading')?.classList.add('hidden');
 }
 
 function showCreateEventModal() {
@@ -1088,4 +1102,42 @@ function updateHistory(pageId) {
     const title = document.title;
     const url = '#' + pageId;
     history.pushState(state, title, url);
+}
+
+// Fetch and render "Last updated" on Venues and Events pages
+function loadAndRenderLastUpdated() {
+  fetch('/api/last-updated')
+    .then(r => r.json())
+    .then(({ lastUpdated }) => {
+      const text = lastUpdated
+        ? `Last updated: ${new Date(lastUpdated).toLocaleString(undefined, {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          })}`
+        : 'Last updated: N/A';
+
+      // Use the predefined footer cell and render a full-width banner
+      const cell = document.getElementById('venuesLastUpdatedCell');
+      if (cell) {
+        cell.innerHTML = `<div class="last-updated-banner">${text}</div>`;
+      }
+
+      // Optional: also show on Events list (if you have an events page/section)
+      const eventsList = document.getElementById('eventsList');
+      if (eventsList) {
+        let el = eventsList.querySelector('.last-updated');
+        if (!el) {
+          el = document.createElement('div');
+          el.className = 'last-updated';
+          eventsList.appendChild(el);
+        }
+        el.textContent = text;
+      }
+    })
+    .catch(() => {});
 }

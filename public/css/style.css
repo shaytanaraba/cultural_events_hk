@@ -139,7 +139,6 @@ main {
 
 .page {
   display: none;
-  animation: fadeIn 0.3s ease;
 }
 
 .page.active {
@@ -265,6 +264,12 @@ main {
   font-size: 0.875rem;
 }
 
+/* Center the Login button text */
+#loginForm .btn {
+  justify-content: center;
+  align-items: center;
+}
+
 /* Table Styles */
 .venues-table {
   background: var(--bg-secondary);
@@ -272,6 +277,26 @@ main {
   overflow: hidden;
   box-shadow: var(--shadow-md);
   margin-bottom: 2rem;
+}
+
+#venuesTable { 
+  width: 100%; 
+}
+
+#venuesLastUpdatedFooter { 
+  width: 100%; 
+}
+
+#venuesLastUpdatedCell { 
+  padding: 0; 
+}
+
+.last-updated-banner {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: right;
+  color: var(--text-muted, #666);
 }
 
 .table-controls {
@@ -432,6 +457,11 @@ tbody tr:hover {
   font-size: 1.25rem;
 }
 
+.venue-name {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
 /* Events List */
 .events-list {
   display: grid;
@@ -550,9 +580,9 @@ tbody tr:hover {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 6px;
   padding: 0.5rem;
   border-radius: var(--radius-md);
   transition: all 0.3s ease;
@@ -797,7 +827,7 @@ tbody tr:hover {
 .p-2 { padding: 0.5rem; }
 .p-3 { padding: 1rem; }
 .p-4 { padding: 1.5rem; }
-.hidden { display: none; }
+.hidden { display: none !important; }
 .flex { display: flex; }
 .flex-column { flex-direction: column; }
 .justify-center { justify-content: center; }
@@ -824,4 +854,20 @@ tbody tr:hover {
     0% { transform: scale(1); }
     50% { transform: scale(1.3); }
     100% { transform: scale(1); }
+}
+
+/* Horizontal layout for action buttons */
+.actions-cell {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* Make buttons inline and aligned */
+.btn,
+.like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

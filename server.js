@@ -44,7 +44,6 @@ const Venue = mongoose.model('Venue', {
   address: { type: String },
   description: { type: String },
   events: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Event' }],
-  // CHANGED: Store array of user IDs instead of number
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   lastUpdated: { type: Date, default: Date.now }
 });
@@ -60,16 +59,36 @@ const Event = mongoose.model('Event', {
   category: { type: String },
   price: { type: String },
   url: { type: String },
-  // CHANGED: Store array of user IDs instead of number
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   lastUpdated: { type: Date, default: Date.now }
 });
+
 const Comment = mongoose.model('Comment', {
   venue: { type: mongoose.Schema.Types.ObjectId, ref: 'Venue', required: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   content: { type: String, required: true },
   createdAt: { type: Date, default: Date.now }
 });
+
+const SystemInfo = mongoose.model('SystemInfo', {
+  key: { type: String, unique: true, required: true },
+  lastUpdated: { type: Date }
+});
+
+// Meta store for global flags/timestamps
+const Meta = mongoose.model('Meta', {
+  key: { type: String, unique: true },
+  value: mongoose.Schema.Types.Mixed,
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// Utility to safely get text from parsed xml2js nodes
+function getText(node, key) {
+  const v = node?.[key];
+  if (!v) return '';
+  const raw = Array.isArray(v) ? v[0] : v;
+  return (typeof raw === 'string' ? raw : raw?._ || '').toString().trim();
+}
 
 // Authentication Middleware
 function isAuthenticated(req, res, next) {
@@ -91,28 +110,58 @@ function isAdmin(req, res, next) {
 // API Routes
 
 // Authentication
-// server.js - Update Login Route
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     const user = await User.findOne({ username });
-    
+
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    
-    // FIXED: Run import/update every time, not just when empty
-    console.log("User login detected. Synchronizing data...");
-    // We don't await this to keep login fast, or you can await if you prefer strict sync
-    importDataFromXML().catch(err => console.error("Background import failed:", err));
-    
+
+    // Create session first
     req.session.userId = user._id;
     req.session.username = user.username;
     req.session.isAdmin = user.isAdmin;
-    
-    res.json({ 
-      message: 'Login successful', 
-      user: { username: user.username, isAdmin: user.isAdmin, userId: user._id } // Send ID for frontend checks
+
+    // Import once per login session
+    const now = new Date();
+    let didImport = false;
+
+    if (!req.session.didSync) {
+      try {
+        console.log('[Import] Starting importDataFromAPI for this session...');
+        await importDataFromAPI();
+        didImport = true;
+
+        // Mark session as synced to avoid repeating during this session
+        req.session.didSync = true;
+
+        // Persist lastUpdated
+        await SystemInfo.findOneAndUpdate(
+          { key: 'data_sync' },
+          { lastUpdated: now },
+          { upsert: true, new: true }
+        );
+        console.log('[Import] importDataFromAPI completed.');
+      } catch (e) {
+        console.error('[Import] importDataFromAPI failed:', e);
+        // Allow login to proceed even if import fails
+      }
+    } else {
+      console.log('[Import] Skipped importDataFromAPI (already synced this session).');
+    }
+
+    // Read latest lastUpdated for response
+    const sys = await SystemInfo.findOne({ key: 'data_sync' });
+
+    res.json({
+      message: 'Login successful',
+      user: { username: user.username, isAdmin: user.isAdmin, userId: user._id },
+      dataSync: {
+        didImport,
+        lastUpdated: sys?.lastUpdated || now
+      }
     });
   } catch (error) {
     console.error(error);
@@ -149,7 +198,6 @@ app.get('/api/venues', async (req, res) => {
     
     let venues = await Venue.find(query).populate('events');
     
-    // Filter by distance if coordinates provided
     if (lat && lng && distance) {
       const userLat = parseFloat(lat);
       const userLng = parseFloat(lng);
@@ -268,7 +316,6 @@ app.get('/api/favorites', isAuthenticated, async (req, res) => {
 });
 
 // Likes
-// UPDATE Event Like Route
 app.post('/api/events/:id/like', isAuthenticated, async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
@@ -278,10 +325,10 @@ app.post('/api/events/:id/like', isAuthenticated, async (req, res) => {
     let liked = false;
 
     if (index === -1) {
-      event.likes.push(userId); // Add like
+      event.likes.push(userId);
       liked = true;
     } else {
-      event.likes.splice(index, 1); // Remove like
+      event.likes.splice(index, 1);
       liked = false;
     }
     
@@ -292,7 +339,6 @@ app.post('/api/events/:id/like', isAuthenticated, async (req, res) => {
   }
 });
 
-// UPDATE Venue Like Route
 app.post('/api/venues/:id/like', isAuthenticated, async (req, res) => {
   try {
     const venue = await Venue.findById(req.params.id);
@@ -302,10 +348,10 @@ app.post('/api/venues/:id/like', isAuthenticated, async (req, res) => {
     let liked = false;
 
     if (index === -1) {
-      venue.likes.push(userId); // Add like
+      venue.likes.push(userId);
       liked = true;
     } else {
-      venue.likes.splice(index, 1); // Remove like
+      venue.likes.splice(index, 1);
       liked = false;
     }
     
@@ -394,10 +440,21 @@ app.delete('/api/admin/events/:id', isAdmin, async (req, res) => {
 // Data import endpoint
 app.post('/api/import-data', async (req, res) => {
   try {
-    await importDataFromXML();
+    await importDataFromAPI();
     res.json({ message: 'Data imported successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to import data' });
+  }
+});
+
+// Last updated timestamp
+app.get('/api/last-updated', async (req, res) => {
+  try {
+    const sys = await SystemInfo.findOne({ key: 'data_sync' });
+    res.json({ lastUpdated: sys?.lastUpdated || null });
+  } catch (e) {
+    console.error('GET /api/last-updated error:', e);
+    res.status(500).json({ lastUpdated: null });
   }
 });
 
@@ -414,95 +471,198 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// Import data from XML files
-// REPLACE the importDataFromXML function
-async function importDataFromXML() {
+// Import data from LCSD public APIs (no local files)
+async function importDataFromAPI() {
+  const VENUES_URL = 'https://www.lcsd.gov.hk/datagovhk/event/venues.xml';
+  const EVENTS_URL = 'https://www.lcsd.gov.hk/datagovhk/event/events.xml';
+  const EVENT_DATES_URL = 'https://www.lcsd.gov.hk/datagovhk/event/eventDates.xml';
+
   try {
-    console.log('Starting data synchronization...');
-    
-    // Parse venues
-    const venuesData = fs.readFileSync('./venues.xml', 'utf8');
-    const venuesResult = await xml2js.parseStringPromise(venuesData);
-    const venuesXML = venuesResult.venues.venue;
-    
-    // Sample coordinates map (same as before)
-    const sampleCoordinates = {
-      '100': { lat: 22.4475, lng: 114.1699, region: 'newterritories' },
-      '101': { lat: 22.4439, lng: 114.0195, region: 'newterritories' },
-      '102': { lat: 22.3193, lng: 114.1884, region: 'kowloon' },
-      '103': { lat: 22.2783, lng: 114.1747, region: 'hongkong' },
-      '104': { lat: 22.3408, lng: 114.2095, region: 'hongkong' },
-      '105': { lat: 22.2994, lng: 114.1719, region: 'kowloon' },
-      '106': { lat: 22.3371, lng: 114.1558, region: 'kowloon' },
-      '107': { lat: 22.3247, lng: 114.1975, region: 'kowloon' },
-      '108': { lat: 22.3845, lng: 114.1168, region: 'newterritories' },
-      '109': { lat: 22.3763, lng: 114.1779, region: 'kowloon' }
-    };
+    console.log('[Import] Fetching XML from LCSD...');
+    const [venuesResp, eventsResp, eventDatesResp] = await Promise.all([
+      axios.get(VENUES_URL, { responseType: 'text', timeout: 20000 }),
+      axios.get(EVENTS_URL, { responseType: 'text', timeout: 20000 }),
+      axios.get(EVENT_DATES_URL, { responseType: 'text', timeout: 20000 })
+    ]);
 
-    // 1. Upsert Venues
-    const venueMap = {}; // To store internal _id for event linking
-    
-    for (const vXML of venuesXML) {
-      const venueId = vXML.$.id;
-      // Only process the specific IDs we want (or logic from original code)
-      if (!sampleCoordinates[venueId]) continue; 
+    console.log('[Import] Parsing XML...');
+    const [venuesResult, eventsResult, eventDatesResult] = await Promise.all([
+      xml2js.parseStringPromise(venuesResp.data),
+      xml2js.parseStringPromise(eventsResp.data),
+      xml2js.parseStringPromise(eventDatesResp.data)
+    ]);
 
-      const venueName = vXML.venuee[0] || vXML.venuec[0];
-      const venueNameC = vXML.venuec[0];
-      const { lat, lng, region } = sampleCoordinates[venueId];
+    const venueNodes = venuesResult?.venues?.venue || [];
+    const eventNodes = eventsResult?.events?.event || [];
+    const eventDateNodes =
+      eventDatesResult?.event_dates?.event ||
+      eventDatesResult?.events?.event ||
+      [];
 
-      // Update if exists, Insert if new
-      const venueDoc = await Venue.findOneAndUpdate(
-        { venueId: venueId },
+    // Build eventDates map: { [eventId]: string[] }
+    const eventDatesMap = new Map();
+    for (const d of eventDateNodes) {
+      const id = d?.$?.id;
+      if (!id) continue;
+      // Known fields vary; try common keys (indate/date/datetime)
+      const dates = []
+        .concat(d.indate || [])
+        .concat(d.date || [])
+        .concat(d.datetime || [])
+        .map(x => (typeof x === 'string' ? x : (x?._ || '')))
+        .map(s => s.trim())
+        .filter(Boolean);
+      eventDatesMap.set(id, dates);
+    }
+
+    // Normalize venues: keep only those with lat/lng and English name
+    const venuesRaw = venueNodes.map(v => {
+      const id = v?.$?.id || '';
+      const nameE = getText(v, 'venuee');
+      const latStr =
+        getText(v, 'latitude') || getText(v, 'Latitude') || getText(v, 'lat');
+      const lngStr =
+        getText(v, 'longitude') || getText(v, 'Longitude') || getText(v, 'long') || getText(v, 'lng');
+
+      const latitude = parseFloat(latStr);
+      const longitude = parseFloat(lngStr);
+
+      return {
+        id: id?.toString(),
+        name: nameE || '', // English only per spec
+        latitude: Number.isFinite(latitude) ? latitude : null,
+        longitude: Number.isFinite(longitude) ? longitude : null
+      };
+    });
+
+    // Normalize events
+    const eventsRaw = eventNodes.map(e => {
+      const id = e?.$?.id?.toString();
+      const venueId = getText(e, 'venueid') || getText(e, 'venueId');
+      const title = getText(e, 'titlee'); // English only
+      const description = getText(e, 'desce');
+      const predateE = getText(e, 'predateE') || getText(e, 'predatee');
+      const presenter =
+        getText(e, 'presentere') ||
+        getText(e, 'presenterE') ||
+        getText(e, 'presenter') ||
+        'LCSD';
+
+      // Prefer predateE; otherwise synthesize from eventDates list
+      const datesFromMap = eventDatesMap.get(id || '') || [];
+      const dateTime = predateE || (datesFromMap.length ? datesFromMap.join(', ') : 'TBA');
+
+      return {
+        id,
+        venueId: venueId?.toString(),
+        title,
+        description: description || 'No description',
+        dateTime,
+        presenter
+      };
+    }).filter(e => e.id && e.venueId && e.title);
+
+    // Count events per venue
+    const eventsByVenue = new Map();
+    for (const ev of eventsRaw) {
+      if (!eventsByVenue.has(ev.venueId)) eventsByVenue.set(ev.venueId, []);
+      eventsByVenue.get(ev.venueId).push(ev);
+    }
+
+    // Candidate venues: must have lat/lng and at least 3 events
+    const candidates = venuesRaw.filter(v =>
+      v.id && v.name && v.latitude != null && v.longitude != null &&
+      (eventsByVenue.get(v.id)?.length || 0) >= 3
+    );
+
+    if (candidates.length < 10) {
+      console.warn(`[Import] Only ${candidates.length} venues meet the criteria (need 10). Importing what’s available.`);
+    }
+
+    // Pick top 10 by number of events (desc), then name asc
+    const selectedVenues = candidates
+      .sort((a, b) => {
+        const ca = eventsByVenue.get(a.id)?.length || 0;
+        const cb = eventsByVenue.get(b.id)?.length || 0;
+        if (cb !== ca) return cb - ca;
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, 10);
+
+    const selectedVenueIds = new Set(selectedVenues.map(v => v.id));
+
+    // Filter events to only those selected venues
+    const selectedEvents = eventsRaw.filter(e => selectedVenueIds.has(e.venueId));
+
+    console.log(`[Import] Selected venues: ${selectedVenues.length}, events: ${selectedEvents.length}`);
+
+    // Replace existing Venue/Event collections to enforce the 10-venue constraint
+    // Note: This will break existing favorites/likes references. Keep or remove as per your needs.
+    await Event.deleteMany({});
+    await Venue.deleteMany({});
+
+    const now = new Date();
+
+    // Upsert venues and build map from venueId -> _id
+    const venueIdToObjectId = new Map();
+    for (const v of selectedVenues) {
+      const doc = await Venue.findOneAndUpdate(
+        { venueId: v.id },
         {
-          name: venueName,
-          nameC: venueNameC,
-          latitude: lat,
-          longitude: lng,
-          region: region,
-          address: `${venueName}, Hong Kong`,
-          lastUpdated: Date.now()
+          name: v.name,
+          latitude: v.latitude,
+          longitude: v.longitude,
+          lastUpdated: now
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
-      venueMap[venueId] = venueDoc._id;
+      venueIdToObjectId.set(v.id, doc._id);
     }
 
-    // 2. Upsert Events
-    const eventsData = fs.readFileSync('./events.xml', 'utf8');
-    const eventsResult = await xml2js.parseStringPromise(eventsData);
-    const eventsXML = eventsResult.events.event;
+    // Insert events, link to venues
+    const venueToEventObjectIds = new Map();
+    for (const ev of selectedEvents) {
+      const venueObjId = venueIdToObjectId.get(ev.venueId);
+      if (!venueObjId) continue;
 
-    for (const eXML of eventsXML) {
-      const venueId = eXML.venueid[0];
-      if (!venueMap[venueId]) continue; // Skip if venue not in our list
-
-      const title = eXML.titlee[0] || eXML.titlec[0] || 'Untitled';
-      const description = eXML.desce[0] || 'No description';
-      const dateTime = eXML.predateE[0] || 'TBA';
-      
-      const eventDoc = await Event.findOneAndUpdate(
-        { eventId: eXML.$.id },
+      const eDoc = await Event.findOneAndUpdate(
+        { eventId: ev.id },
         {
-          title,
-          venue: venueMap[venueId],
-          description,
-          dateTime,
-          presenter: 'Cultural Services Department',
-          lastUpdated: Date.now()
+          title: ev.title,
+          venue: venueObjId,
+          description: ev.description,
+          presenter: ev.presenter,
+          dateTime: ev.dateTime,
+          lastUpdated: now
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
-      // Link event to venue (ensure uniqueness)
-      await Venue.findByIdAndUpdate(venueMap[venueId], {
-        $addToSet: { events: eventDoc._id }
-      });
+      if (!venueToEventObjectIds.has(ev.venueId)) venueToEventObjectIds.set(ev.venueId, []);
+      venueToEventObjectIds.get(ev.venueId).push(eDoc._id);
     }
-    
-    console.log(`Data synchronization completed.`);
-  } catch (error) {
-    console.error('Error importing data:', error);
+
+    // Update Venue.events arrays (set, not addToSet)
+    await Promise.all(
+      Array.from(venueToEventObjectIds.entries()).map(([venueId, evIds]) =>
+        Venue.findOneAndUpdate(
+          { venueId },
+          { $set: { events: evIds }, lastUpdated: now }
+        )
+      )
+    );
+
+    // Save global lastUpdated
+    await Meta.findOneAndUpdate(
+      { key: 'dataImport' },
+      { value: { lastImportedAt: now }, updatedAt: now },
+      { upsert: true }
+    );
+
+    console.log('[Import] Completed successfully at', now.toISOString());
+  } catch (err) {
+    console.error('[Import] Failed:', err);
+    throw err;
   }
 }
 

@@ -77,6 +77,7 @@
                 <table id="venuesTable" class="hidden">
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th onclick="sortVenues('name')">Name <i class="fas fa-sort"></i></th>
                             <th onclick="sortVenues('distance')">Distance <i class="fas fa-sort"></i></th>
                             <th onclick="sortVenues('events')">Events <i class="fas fa-sort"></i></th>
@@ -84,6 +85,11 @@
                         </tr>
                     </thead>
                     <tbody id="venuesTableBody"></tbody>
+                    <tfoot id="venuesLastUpdatedFooter">
+                        <tr>
+                            <td colspan="5" id="venuesLastUpdatedCell" style="padding:8px; text-align:right; color:var(--text-muted,#666); font-size:0.9rem;"></td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
