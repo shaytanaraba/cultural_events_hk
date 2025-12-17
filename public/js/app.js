@@ -468,7 +468,7 @@ function displayVenueDetail(venue) {
                 <p class="text-secondary">${venue.nameC || ''}</p>
             </div>
             <div>
-                <button class="btn btn-secondary" onclick="toggleFavoriteVenue('${venue._id}')">
+                <button class="btn btn-secondary" onclick="toggleFavoriteVenue(event, '${venue._id}')" id="favoriteBtn">
                     <i class="fas fa-star"></i> Add to Favorites
                 </button>
                 <button class="like-btn ${venueLikeClass}" onclick="toggleLikeVenue(event, '${venue._id}')">
@@ -545,6 +545,7 @@ function displayVenueDetail(venue) {
     
     // Load comments
     loadComments(venue._id);
+    applyFavoriteButtonState(venue._id);
 }
 
 // Comments
@@ -692,71 +693,114 @@ function getCurrentLocation() {
 
 // Favorites
 function loadFavorites() {
-    const contentDiv = document.getElementById('favoritesContent');
-    contentDiv.innerHTML = '<div class="loading">Loading favorites...</div>';
-    
-    fetch('/api/favorites')
-        .then(response => response.json())
-        .then(favorites => {
-            displayFavorites(favorites);
-        })
-        .catch(error => {
-            console.error('Error loading favorites:', error);
-            contentDiv.innerHTML = '<p>Error loading favorites</p>';
-        });
-}
+  const contentDiv = document.getElementById('favoritesContent');
+  contentDiv.innerHTML = '<div class="loading">Loading favorites...</div>';
 
-function displayFavorites(favorites) {
-    const contentDiv = document.getElementById('favoritesContent');
-    
-    if (favorites.length === 0) {
-        contentDiv.innerHTML = '<p>No favorite venues yet. Start adding some!</p>';
-        return;
-    }
-    
-    contentDiv.innerHTML = `
-        <div class="cards-grid">
-            ${favorites.map(venue => `
-                <div class="card" onclick="showVenueDetail('${venue._id}')">
-                    <div class="card-title">${venue.name}</div>
-                    <div class="card-content">
-                        <p>Events: ${venue.events ? venue.events.length : 0}</p>
-                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); removeFavorite('${venue._id}')">
-                            Remove from Favorites
-                        </button>
-                    </div>
-                </div>
-            `).join('')}
-        </div>
-    `;
-}
+  const favs = getFavoriteVenueIds();
+  if (!favs || favs.size === 0) {
+    contentDiv.innerHTML = '<p>No favorite venues yet. Start adding some!</p>';
+    return;
+  }
 
-function toggleFavoriteVenue(venueId) {
-    fetch(`/api/venues/${venueId}/favorite`, {
-        method: 'POST'
+  // Pull venues and filter by favorite _ids
+  fetch('/api/venues')
+    .then(res => res.json())
+    .then(allVenues => {
+      const favVenues = allVenues.filter(v => favs.has(v._id));
+      displayFavorites(favVenues);
     })
-    .then(response => response.json())
-    .then(data => {
-        showToast(data.message, 'success');
-    })
-    .catch(error => {
-        console.error('Error toggling favorite:', error);
-        showToast('Error adding to favorites', 'error');
+    .catch(err => {
+      console.error('Error loading favorites:', err);
+      contentDiv.innerHTML = '<p>Error loading favorites</p>';
     });
 }
 
 function removeFavorite(venueId) {
-    fetch(`/api/venues/${venueId}/favorite`, {
-        method: 'DELETE'
-    })
-    .then(response => response.json())
-    .then(() => {
-        loadFavorites();
-    })
-    .catch(error => {
-        console.error('Error removing favorite:', error);
-        showToast('Error removing from favorites', 'error');
-    });
+  const favs = getFavoriteVenueIds();
+  if (favs.has(venueId)) {
+    favs.delete(venueId);
+    setFavoriteVenueIds(favs);
+    showToast('Removed from favorites', 'success');
+    loadFavorites();
+    // If currently viewing this venue, update the star button state
+    if (currentVenue === venueId) applyFavoriteButtonState(venueId);
+  }
+}
+
+// Local favorites (persist across tabs without DB)
+const FAVORITES_KEY = 'favoriteVenues';
+function getFavoriteVenueIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]')); }
+  catch { return new Set(); }
+}
+function setFavoriteVenueIds(set) {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...set]));
+}
+function applyFavoriteButtonState(venueId) {
+  const btn = document.getElementById('favoriteBtn');
+  if (!btn) return;
+  const favs = getFavoriteVenueIds();
+  const isFav = favs.has(venueId);
+  if (isFav) {
+    btn.classList.add('favorited');
+    btn.innerHTML = '<i class="fas fa-star"></i> Favorited';
+  } else {
+    btn.classList.remove('favorited');
+    btn.innerHTML = '<i class="fas fa-star"></i> Add to Favorites';
+  }
+}
+
+// Ensure your detail renderer calls this after injecting the button HTML
+// e.g., at the end of displayVenueDetail(venue):
+// applyFavoriteButtonState(venue._id);
+
+// Toggle favorite (client-side persisted)
+function toggleFavoriteVenue(e, venueId) {
+  if (e?.preventDefault) e.preventDefault();
+  if (e?.stopPropagation) e.stopPropagation();
+
+  const favs = getFavoriteVenueIds();
+  let isFav;
+  if (favs.has(venueId)) {
+    favs.delete(venueId);
+    isFav = false;
+  } else {
+    favs.add(venueId);
+    isFav = true;
+  }
+  setFavoriteVenueIds(favs);
+  applyFavoriteButtonState(venueId);
+  showToast(isFav ? 'Added to favorites' : 'Removed from favorites', 'success');
+}
+
+function displayFavorites(favVenues) {
+  const container = document.getElementById('favoritesContent') || document.getElementById('favoritesPage');
+  if (!container) return;
+
+  if (!Array.isArray(favVenues) || favVenues.length === 0) {
+    container.innerHTML = '<p>No favorite venues yet. Start adding some!</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="cards-grid">
+      ${favVenues.map(v => `
+        <div class="card">
+          <div class="card-title">${v.name}</div>
+          <div class="card-content">
+            <p><strong>ID:</strong> ${v.venueId || '-'}</p>
+            <p><strong>Events:</strong> ${Array.isArray(v.events) ? v.events.length : 0}</p>
+            <div class="mt-3" style="display:flex; gap:8px;">
+              <button class="btn btn-sm btn-secondary" onclick="showVenueDetail('${v._id}')">View</button>
+              <button class="btn btn-sm favorited" onclick="removeFavorite('${v._id}')">
+                <i class="fas fa-star"></i> Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 // Likes

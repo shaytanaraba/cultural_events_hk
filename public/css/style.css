@@ -264,6 +264,16 @@ main {
   font-size: 0.875rem;
 }
 
+/* Favorited (star) indicator */
+.btn.favorited {
+  background-color: #fef3c7; /* light amber */
+  color: #92400e;            /* amber-900 */
+  border: 1px solid #f59e0b; /* amber-500 */
+}
+.btn.favorited i {
+  color: #f59e0b; /* star icon amber */
+}
+
 /* Center the Login button text */
 #loginForm .btn {
   justify-content: center;
@@ -882,4 +892,28 @@ tbody tr:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* Make the Favorites button layout match the heart button */
+#favoriteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Favorited (star) indicator — yellow theme similar to like-btn.liked */
+.btn.favorited {
+  background-color: rgba(245, 158, 11, 0.10); /* amber-500 @ 10% */
+  color: #92400e;                              /* amber-900 */
+  border: 1px solid #f59e0b;                   /* amber-500 */
+  font-weight: bold;
+}
+
+.btn.favorited:hover {
+  background-color: rgba(245, 158, 11, 0.15);
+}
+
+.btn.favorited i {
+  color: #f59e0b;               /* star icon amber */
+  animation: pulse 0.3s ease;   /* same pop as heart */
 }
