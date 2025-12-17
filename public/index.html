@@ -132,22 +132,6 @@
                     <h3>Manage Users</h3>
                     <button class="btn btn-primary mb-3" onclick="showCreateUserForm()">Create New User</button>
                     <div id="usersList" class="loading">Loading users...</div>
-                    
-                    <!-- Create User Form (Inline) -->
-                    <div id="createUserForm" class="form-container hidden">
-                        <h4>Create User</h4>
-                        <form class="form-group" onsubmit="createUser(event)">
-                            <input type="text" id="newUsername" placeholder="Username" required>
-                            <input type="password" id="newPassword" placeholder="Password" required>
-                            <label>
-                                <input type="checkbox" id="newIsAdmin"> Admin User
-                            </label>
-                            <div class="mt-2">
-                                <button type="submit" class="btn btn-success">Create</button>
-                                <button type="button" class="btn btn-secondary" onclick="hideCreateUserForm()">Cancel</button>
-                            </div>
-                        </form>
-                    </div>
                 </div>
                 
                 <!-- Events Tab -->
@@ -192,8 +176,8 @@
                         <input type="password" id="editPassword">
                     </div>
                     <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="editIsAdmin"> Is Admin
+                        <label class="form-check-inline">
+                            <input type="checkbox" id="editIsAdmin"> Admin
                         </label>
                     </div>
                     <div class="flex gap-2 justify-center">
@@ -254,6 +238,31 @@
                     <div class="flex gap-2 justify-center">
                         <button type="submit" class="btn btn-success">Create</button>
                         <button type="button" class="btn btn-secondary" onclick="closeModal('createEventModal')">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <!-- Create User Modal -->
+        <div id="createUserModal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <h3>Create User</h3>
+                <form onsubmit="createUser(event)">
+                    <div class="form-group">
+                        <label for="newUsername">Username</label>
+                        <input type="text" id="newUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">Password</label>
+                        <input type="password" id="newPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-check-inline" for="newIsAdmin">
+                            <input type="checkbox" id="newIsAdmin"> Admin
+                        </label>
+                    </div>
+                    <div class="flex gap-2 justify-center">
+                        <button type="submit" class="btn btn-success">Create</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('createUserModal')">Cancel</button>
                     </div>
                 </form>
             </div>

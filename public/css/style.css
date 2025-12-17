@@ -985,3 +985,24 @@ tbody tr:hover {
   color: #f59e0b;               /* star icon amber */
   animation: pulse 0.3s ease;   /* same pop as heart */
 }
+
+/* Inline Form Check */
+.form-check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.form-check-inline input[type="checkbox"] {
+  margin: 0;
+}
+
+/* Force admin checkbox inline with text (overrides .form-group label { display:block }) */
+.form-group label.form-check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+.form-check-inline input[type="checkbox"] {
+  margin: 0;
+}

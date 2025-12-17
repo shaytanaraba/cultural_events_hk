@@ -1002,11 +1002,11 @@ function displayUsers(users) {
 }
 
 function showCreateUserForm() {
-    document.getElementById('createUserForm').classList.remove('hidden');
+  document.getElementById('createUserModal').classList.remove('hidden');
 }
 
 function hideCreateUserForm() {
-    document.getElementById('createUserForm').classList.add('hidden');
+  document.getElementById('createUserModal').classList.add('hidden');
 }
 
 function createUser(event) {
