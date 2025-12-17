@@ -90,6 +90,25 @@ function getText(node, key) {
   return (typeof raw === 'string' ? raw : raw?._ || '').toString().trim();
 }
 
+// Rough classifier: HK Island (south of harbor), Kowloon (north of harbor), else New Territories.
+// Tuned for LCSD venue coordinates; adjust thresholds if needed.
+function classifyRegion(lat, lng) {
+  // Unknown or missing coords => others
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return 'others';
+
+  // Hong Kong Island: roughly below ~22.285
+  if (lat < 22.285) return 'hongkong';
+
+  // Kowloon: roughly 22.285–22.36 and within main Kowloon longitudes
+  if (lat >= 22.285 && lat < 22.36 && lng > 113.9 && lng < 114.27) return 'kowloon';
+
+  // New Territories: north of Kowloon within HK longitudes
+  if (lat >= 22.36 && lng > 113.8 && lng < 114.4) return 'newterritories';
+
+  // Everything else (outliers/outside bounds)
+  return 'others';
+}
+
 // Authentication Middleware
 function isAuthenticated(req, res, next) {
   if (req.session.userId) {
@@ -610,6 +629,7 @@ async function importDataFromAPI() {
           name: v.name,
           latitude: v.latitude,
           longitude: v.longitude,
+          region: classifyRegion(v.latitude, v.longitude), // <- set region here
           lastUpdated: now
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
