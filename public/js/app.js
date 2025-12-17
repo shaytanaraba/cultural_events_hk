@@ -102,11 +102,17 @@ function setupEventListeners() {
         e.preventDefault();
         login();
     });
-    
-    // Search and filters
+
+    // Existing filters...
     document.getElementById('venueSearch').addEventListener('input', filterVenues);
     document.getElementById('areaFilter').addEventListener('change', filterVenues);
     document.getElementById('distanceFilter').addEventListener('input', filterVenues);
+
+    // Hook up Admin "Create Event" form if present
+    const createEventForm = document.getElementById('createEventForm');
+    if (createEventForm) {
+        createEventForm.addEventListener('submit', submitNewEvent);
+    }
 }
 
 // Ensure login() hides the form after success
@@ -288,58 +294,73 @@ function showCreateEventModal() {
     document.getElementById('createEventModal').classList.remove('hidden');
 }
 
-function createEvent(event) {
-    event.preventDefault();
-    
-    // In a real app you'd fetch venue _id, here we accept a raw ID or name for simplicity
-    // or you might need a dropdown of venues. For this fix, we assume strict input.
-    const title = document.getElementById('newEvTitle').value;
-    const dateTime = document.getElementById('newEvDate').value;
-    const description = document.getElementById('newEvDesc').value;
-    const venueIdInput = document.getElementById('newEvVenueId').value;
-    
-    // We need to find the Mongo _id of the venue based on the input ID
-    // Ideally this should be a <select> in the UI populated by venues
-    // But to make it work with current structure:
-    fetch('/api/venues') // Quick fetch to find the ID
-    .then(res => res.json())
-    .then(venues => {
-        const venue = venues.find(v => v.venueId === venueIdInput || v.venueId === venueIdInput.toString());
-        if (!venue) {
-            showToast('Venue ID not found', 'error');
-            return;
+// RENAMED: avoid conflict with document.createEvent
+function submitNewEvent(e) {
+    e.preventDefault();
+
+    const title = document.getElementById('newEvTitle').value.trim();
+    const dateTime = document.getElementById('newEvDate').value.trim(); // e.g. 30/01/2026(Fri)20:00\n31/01/2026(Sat)15:00
+    const description = document.getElementById('newEvDesc').value.trim();
+    const venueIdInput = document.getElementById('newEvVenueId').value.trim(); // LCSD venueId
+
+    if (!title || !dateTime || !venueIdInput) {
+        showToast('Please fill in Title, Date/Time and Venue ID', 'error');
+        return;
+    }
+
+    // Accepts one or multiple date lines; minimal format check for DD/MM/YYYY
+    const dtLines = dateTime.split('\n').map(s => s.trim()).filter(Boolean);
+    const dateOk = dtLines.every(l => /^\d{2}\/\d{2}\/\d{4}/.test(l));
+    if (!dateOk) {
+        showToast("Invalid Date/Time. Example:\n30/01/2026(Fri)20:00\n31/01/2026(Sat)15:00", 'error');
+        return;
+    }
+
+    // Find Venue by LCSD venueId => get Mongo _id
+    fetch('/api/venues')
+      .then(res => res.json())
+      .then(venuesList => {
+        const venue = venuesList.find(v => String(v.venueId) === String(venueIdInput));
+        if (!venue || !venue._id) {
+          showToast('Venue ID not found. Use a valid LCSD venueId from the Venues list.', 'error');
+          throw new Error('Venue not found');
         }
 
         const payload = {
-            eventId: 'custom_' + Date.now(), // Generate a unique ID
-            title,
-            dateTime,
-            description,
-            venue: venue._id,
-            presenter: 'Admin Custom',
-            category: 'Special',
-            price: 'Free'
+          eventId: 'custom_' + Date.now(),
+          title,
+          dateTime, // keep exact string, supports multiple lines
+          description: description || 'No description',
+          presenter: 'LCSD',
+          venue: venue._id
         };
 
         return fetch('/api/admin/events', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
-    })
-    .then(response => {
-        if(response && response.ok) return response.json();
-    })
-    .then(data => {
-        if(data) {
-            closeModal('createEventModal');
-            showToast('Event created successfully', 'success');
-            loadEvents(); // Refresh list
-            document.getElementById('newEvTitle').value = ''; // Clear form
-        }
-    })
-    .catch(err => console.error(err));
+      })
+      .then(response => {
+        if (!response || !response.ok) throw new Error('Create event failed');
+        return response.json();
+      })
+      .then(() => {
+        closeModal('createEventModal');
+        showToast('Event created successfully', 'success');
+        loadEvents();
+        document.getElementById('newEvTitle').value = '';
+        document.getElementById('newEvDate').value = '';
+        document.getElementById('newEvDesc').value = '';
+        document.getElementById('newEvVenueId').value = '';
+      })
+      .catch(err => {
+        if (err && err.message === 'Venue not found') return;
+        console.error(err);
+        showToast('Failed to create event. Ensure inputs follow the required format.', 'error');
+      });
 }
+
 function sortVenues(field) {
     if (sortOrder.field === field) {
         sortOrder.ascending = !sortOrder.ascending;
@@ -795,14 +816,17 @@ function showAdminTab(tabName) {
     document.querySelectorAll('.admin-tab').forEach(tab => {
         tab.classList.remove('active');
     });
-    event.target.classList.add('active');
-    
+    // Activate the matching button by text label
+    const btn = Array.from(document.querySelectorAll('.admin-tab'))
+        .find(b => b.textContent.toLowerCase().includes(tabName));
+    if (btn) btn.classList.add('active');
+
     // Update tab content
     document.querySelectorAll('.admin-content').forEach(content => {
         content.classList.remove('active');
     });
     document.getElementById(tabName + 'Tab').classList.add('active');
-    
+
     // Load tab-specific data
     switch(tabName) {
         case 'users':
@@ -810,6 +834,9 @@ function showAdminTab(tabName) {
             break;
         case 'events':
             loadEvents();
+            break;
+        case 'data':
+            // keep as-is; no extra load
             break;
     }
 }
