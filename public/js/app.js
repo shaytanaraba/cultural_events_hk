@@ -158,11 +158,6 @@ function setupEventListeners() {
     document.getElementById('areaFilter').addEventListener('change', filterVenues);
     document.getElementById('distanceFilter').addEventListener('input', filterVenues);
 
-    // Hook up Admin "Create Event" form if present
-    const createEventForm = document.getElementById('createEventForm');
-    if (createEventForm) {
-        createEventForm.addEventListener('submit', submitNewEvent);
-    }
 }
 
 // Ensure login() hides the form after success
@@ -1099,8 +1094,9 @@ function updateUser(event) {
 
 function loadEvents() {
     const eventsList = document.getElementById('eventsList');
+    eventsList.classList.add('loading');
     eventsList.innerHTML = '<div class="loading">Loading events...</div>';
-    
+
     fetch('/api/events')
         .then(response => response.json())
         .then(events => {
@@ -1108,13 +1104,17 @@ function loadEvents() {
         })
         .catch(error => {
             console.error('Error loading events:', error);
+            eventsList.classList.remove('loading');
             eventsList.innerHTML = '<p>Error loading events</p>';
         });
 }
 
 function displayEvents(events) {
     const eventsList = document.getElementById('eventsList');
-    
+
+    // Remove spinner styling once data is ready
+    eventsList.classList.remove('loading');
+
     eventsList.innerHTML = `
         <div class="cards-grid">
             ${events.map(event => `

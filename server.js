@@ -432,6 +432,16 @@ app.post('/api/admin/events', isAdmin, async (req, res) => {
   try {
     const event = new Event(req.body);
     await event.save();
+
+    // Keep venue->events in sync
+    if (event.venue) {
+      await Venue.findByIdAndUpdate(
+        event.venue,
+        { $addToSet: { events: event._id } },
+        { new: true }
+      );
+    }
+
     res.status(201).json(event);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create event' });
@@ -449,7 +459,14 @@ app.put('/api/admin/events/:id', isAdmin, async (req, res) => {
 
 app.delete('/api/admin/events/:id', isAdmin, async (req, res) => {
   try {
+    const event = await Event.findById(req.params.id);
+
     await Event.findByIdAndDelete(req.params.id);
+
+    if (event?.venue) {
+      await Venue.findByIdAndUpdate(event.venue, { $pull: { events: event._id } });
+    }
+
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete event' });
