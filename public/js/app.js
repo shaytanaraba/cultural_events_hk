@@ -1116,20 +1116,31 @@ function displayEvents(events) {
     eventsList.classList.remove('loading');
 
     eventsList.innerHTML = `
-        <div class="cards-grid">
+        <div class="cards-grid admin-events-grid">
             ${events.map(event => `
-                <div class="card">
-                    <div class="card-title">${event.title}</div>
-                    <div class="card-content">
-                        <p><strong>Venue:</strong> ${event.venue ? event.venue.name : 'N/A'}</p>
-                        <p><strong>Date:</strong> ${event.dateTime || 'N/A'}</p>
-                        <p>${event.description ? event.description.substring(0, 100) + '...' : 'No description'}</p>
-                        <div class="mt-3">
+                <article class="card admin-event-card">
+                    <div class="admin-event-top">
+                        <div class="admin-event-heading">
+                            <span class="admin-event-label">Event</span>
+                            <h4 class="card-title clamp-2">${event.title || 'Untitled Event'}</h4>
+                        </div>
+                        <div class="admin-event-actions">
                             <button class="btn btn-sm btn-secondary" onclick="editEvent('${event._id}')">Edit</button>
                             <button class="btn btn-sm btn-danger" onclick="deleteEvent('${event._id}')">Delete</button>
                         </div>
                     </div>
-                </div>
+                    <div class="admin-event-meta">
+                        <div class="meta-item">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span class="meta-text clamp-1">${event.venue ? event.venue.name : 'No venue listed'}</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="far fa-calendar-alt"></i>
+                            <span class="meta-text">${event.dateTime || 'Date/time not provided'}</span>
+                        </div>
+                    </div>
+                    <p class="card-description clamp-4">${event.description || 'No description provided.'}</p>
+                </article>
             `).join('')}
         </div>
     `;
