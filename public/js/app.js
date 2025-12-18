@@ -499,7 +499,25 @@ function showVenueDetail(venueId) {
         });
 }
 
-function displayVenueDetail(venue) {
+async function getVenueAddress(venue) {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${venue.latitude}&lon=${venue.longitude}&zoom=18&addressdetails=1&accept-language=en`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data && data.display_name) {
+            return data.display_name;
+        } else {
+            return "NMM";
+        }
+    } catch (error) {
+        console.error("Error during reverse geocoding:", error);
+        return "NMM";
+    }
+}
+
+async function displayVenueDetail(venue) {
     const contentDiv = document.getElementById('venueDetailContent');
     
     // Check Venue Like Status
@@ -507,6 +525,23 @@ function displayVenueDetail(venue) {
     const isVenueLiked = userId && venue.likes && venue.likes.includes(userId);
     const venueLikeClass = isVenueLiked ? 'liked' : '';
     const venueLikeCount = venue.likes ? venue.likes.length : 0;
+    let venueAdress = await getVenueAddress(venue);
+
+    // const url = `https://nominatim.openstreetmap.org/reverse?lat=${venue.latitude}&lon=${venue.longitude}&zoom=27&addressdetails=1`;
+    // fetch(url)
+    // .then(response => response.json())
+    // .then(data => {
+    //     // Check if an address was found
+    //     if (data && data.display_name) {
+    //         venueAdress = data.display_name;
+    //     } else {
+    //         venueAdress = "NMM";
+    //     }
+    // })
+    // .catch(error => {
+    //     venueAdress = "NMM";
+    //     console.error("Error during reverse geocoding:", error);
+    // });
 
     contentDiv.innerHTML = `
         <div class="venue-header">
@@ -528,8 +563,8 @@ function displayVenueDetail(venue) {
             <div class="venue-section">
                 <h3>Venue Information</h3>
                 <div id="venueMap" style="height: 300px; margin-bottom: 1rem;"></div>
-                <p><strong>Address:</strong> ${venue.address || 'N/A'}</p>
-                <p><strong>Description:</strong> ${venue.description || 'N/A'}</p>
+                <p><strong>Region:</strong> ${venue.region || 'N/A'}</p>
+                <p><strong>Address:</strong> ${venueAdress || 'N/A'}</p>
             </div>
             
             <div class="venue-section">
