@@ -236,7 +236,10 @@ function showPage(pageId, addToHistory = true) {
         loadVenues();
         loadAndRenderLastUpdated();
     }
-    if (pageId === 'map') loadMap();
+    if (pageId === 'map') {
+        loadMap();
+        loadAndRenderLastUpdated();
+    }
     if (pageId === 'favorites') loadFavorites();
     if (pageId === 'admin' && currentUser?.isAdmin) showAdminTab('users');
     if (pageId === 'venues' || pageId === 'events') {
@@ -248,7 +251,8 @@ function showPage(pageId, addToHistory = true) {
 function loadVenues() {
     const loadingDiv = document.getElementById('venuesLoading');
     const tableDiv = document.getElementById('venuesTable');
-    
+
+    renderVenuesSkeleton();
     loadingDiv.classList.remove('hidden');
     tableDiv.classList.add('hidden');
     
@@ -264,6 +268,29 @@ function loadVenues() {
             console.error('Error loading venues:', error);
             loadingDiv.textContent = 'Error loading venues';
         });
+}
+
+function renderVenuesSkeleton() {
+  const loadingDiv = document.getElementById('venuesLoading');
+  if (!loadingDiv) return;
+
+  const rows = Array.from({ length: 5 })
+    .map(() => `
+      <div class="skeleton-row">
+        <div class="skeleton skeleton-pill"></div>
+        <div class="skeleton skeleton-pill"></div>
+        <div class="skeleton skeleton-pill"></div>
+        <div class="skeleton skeleton-pill"></div>
+        <div class="skeleton skeleton-pill"></div>
+      </div>
+    `)
+    .join('');
+
+  loadingDiv.innerHTML = `
+    <div class="skeleton-table">
+      ${rows}
+    </div>
+  `;
 }
 function displayVenues(venuesToDisplay) {
   const tbody = document.getElementById('venuesTableBody');
@@ -484,9 +511,9 @@ function filterVenues() {
 function showVenueDetail(venueId) {
     currentVenue = venueId;
     showPage('venueDetail');
-    
+
     const contentDiv = document.getElementById('venueDetailContent');
-    contentDiv.innerHTML = '<div class="loading">Loading venue details...</div>';
+    renderVenueDetailSkeleton();
     
     fetch(`/api/venues/${venueId}`)
         .then(response => response.json())
@@ -497,6 +524,63 @@ function showVenueDetail(venueId) {
             console.error('Error loading venue details:', error);
             contentDiv.innerHTML = '<div class="error-message">Error loading venue details</div>';
         });
+}
+
+function renderVenueDetailSkeleton() {
+  const contentDiv = document.getElementById('venueDetailContent');
+  if (!contentDiv) return;
+
+  const eventSkeletons = Array.from({ length: 2 })
+    .map(() => `
+      <div class="skeleton-event-card">
+        <div class="skeleton skeleton-line" style="width: 60%"></div>
+        <div class="skeleton skeleton-line" style="width: 40%"></div>
+        <div class="skeleton skeleton-line"></div>
+      </div>
+    `)
+    .join('');
+
+  contentDiv.innerHTML = `
+    <div class="venue-detail">
+      <div class="venue-header">
+        <div>
+          <div class="skeleton skeleton-line" style="width: 220px; height: 24px;"></div>
+          <div class="skeleton skeleton-line" style="width: 160px;"></div>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <div class="skeleton skeleton-line" style="width: 140px; height: 36px;"></div>
+          <div class="skeleton skeleton-line" style="width: 90px; height: 36px;"></div>
+        </div>
+      </div>
+      <div class="venue-info">
+        <div class="venue-section">
+          <div class="skeleton skeleton-line" style="width: 100%; height: 200px;"></div>
+          <div class="skeleton skeleton-line" style="width: 80%;"></div>
+          <div class="skeleton skeleton-line" style="width: 90%;"></div>
+        </div>
+        <div class="venue-section">
+          <div class="skeleton skeleton-line" style="width: 70%; height: 24px;"></div>
+          ${eventSkeletons}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCardSkeletons(count = 2) {
+  return `
+    <div class="skeleton-table">
+      ${Array.from({ length: count })
+        .map(() => `
+          <div class="skeleton-event-card">
+            <div class="skeleton skeleton-line" style="width: 50%"></div>
+            <div class="skeleton skeleton-line" style="width: 70%"></div>
+            <div class="skeleton skeleton-line"></div>
+          </div>
+        `)
+        .join('')}
+    </div>
+  `;
 }
 
 function displayVenueDetail(venue) {
@@ -681,19 +765,31 @@ function loadMap() {
             groups.forEach((groupVenues, key) => {
                 const [latStr, lngStr] = key.split(',');
                 const lat = parseFloat(latStr), lng = parseFloat(lngStr);
+                const countLabel = groupVenues.length;
 
-                const marker = L.marker([lat, lng]).addTo(map);
+                const marker = L.marker([lat, lng], {
+                  icon: L.divIcon({
+                    className: 'cluster-marker',
+                    html: `<div class="cluster-badge">${countLabel}</div>`,
+                    iconSize: [38, 38],
+                    iconAnchor: [19, 38]
+                  })
+                }).addTo(map);
 
                 // Build popup listing all venues at this coordinate
                 const popupHtml = `
                     <div style="min-width:220px">
-                        ${groupVenues.map(v => {
+                        ${groupVenues.map((v, index) => {
                             const eventsCount = v.events ? v.events.length : 0;
+                            const badge = `<span style="display:inline-block;min-width:22px;height:22px;border-radius:50%;background:var(--primary-color,#2563eb);color:white;text-align:center;line-height:22px;font-size:12px;margin-right:6px;">${index + 1}</span>`;
                             return `
-                                <div style="margin-bottom:8px; border-bottom:1px solid var(--border-color,#e5e7eb); padding-bottom:6px;">
-                                    <strong>${v.name}</strong><br>
-                                    Events: ${eventsCount}<br>
-                                    <a href="#" onclick="showVenueDetail('${v._id}'); return false;">View Details</a>
+                                <div style="margin-bottom:8px; border-bottom:1px solid var(--border-color,#e5e7eb); padding-bottom:6px; display:flex; align-items:flex-start; gap:6px;">
+                                    ${badge}
+                                    <div>
+                                      <strong>${v.name}</strong><br>
+                                      Events: ${eventsCount}<br>
+                                      <a href="#" onclick="showVenueDetail('${v._id}'); return false;">View Details</a>
+                                    </div>
                                 </div>
                             `;
                         }).join('')}
@@ -707,7 +803,13 @@ function loadMap() {
         .catch(error => console.error('Error loading venues for map:', error));
 }
 
-function getCurrentLocation() {
+function getCurrentLocation(event) {
+    const btn = event?.target;
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '📍 Getting location...';
+    }
+
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             position => {
@@ -715,33 +817,53 @@ function getCurrentLocation() {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude
                 };
-                
+
+                if (btn) {
+                  btn.textContent = '✅ Location set';
+                }
+                showToast(`Location set to ${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)}`, 'success');
+
                 // Update map if on map page
                 if (map) {
                     map.setView([userLocation.lat, userLocation.lng], 13);
                     L.marker([userLocation.lat, userLocation.lng])
                         .addTo(map)
-                        .bindPopup('Your Location')
+                        .bindPopup('📍 Your Location')
                         .openPopup();
                 }
-                
+
                 // Re-filter venues
                 filterVenues();
+
+                if (btn) {
+                  setTimeout(() => {
+                    btn.disabled = false;
+                    btn.textContent = 'Use My Location';
+                  }, 2000);
+                }
             },
             error => {
                 console.error('Error getting location:', error);
                 showToast('Unable to get your location', 'error');
+                if (btn) {
+                  btn.disabled = false;
+                  btn.textContent = 'Use My Location';
+                }
             }
         );
     } else {
         showToast('Geolocation is not supported by your browser', 'error');
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Use My Location';
+        }
     }
 }
 
 // Favorites
 function loadFavorites() {
   const contentDiv = document.getElementById('favoritesContent');
-  contentDiv.innerHTML = '<div class="loading">Loading favorites...</div>';
+  contentDiv.innerHTML = renderCardSkeletons(3);
 
   const favs = getFavoriteVenueIds();
   if (!favs || favs.size === 0) {
@@ -1273,6 +1395,12 @@ function loadAndRenderLastUpdated() {
       if (cell) {
         cell.innerHTML = `<div class="last-updated-banner">${text}</div>`;
       }
+
+      // Update other surfaces
+      ['lastUpdatedBadge', 'mapLastUpdated', 'headerLastUpdated'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+      });
 
       // Optional: also show on Events list (if you have an events page/section)
       const eventsList = document.getElementById('eventsList');

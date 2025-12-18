@@ -74,6 +74,14 @@ header {
   align-items: center;
 }
 
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+}
+
 .logo {
   font-size: 1.5rem;
   font-weight: bold;
@@ -386,6 +394,41 @@ main {
   align-items: center;
 }
 
+.table-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
+.hint-text {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.last-updated-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-tertiary);
+  border-radius: 9999px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 0.95rem;
+}
+
+.last-updated-chip.compact {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
 .search-input {
   flex: 1;
   min-width: 200px;
@@ -479,6 +522,57 @@ tbody tr:hover {
     to { opacity: 0; visibility: hidden; }
 }
 
+/* Skeleton Loaders */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-tertiary), var(--bg-secondary), var(--bg-tertiary));
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-line {
+  height: 14px;
+  margin: 6px 0;
+}
+
+.skeleton-circle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+
+.skeleton-table {
+  padding: 1.25rem 1.5rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.skeleton-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr 1fr 1fr;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.skeleton-pill {
+  height: 18px;
+  width: 80%;
+}
+
+.skeleton-event-card {
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  display: grid;
+  gap: 0.5rem;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* Map Container */
 .map-container {
   background: var(--bg-secondary);
@@ -486,6 +580,20 @@ tbody tr:hover {
   padding: 1.5rem;
   box-shadow: var(--shadow-md);
   margin-bottom: 2rem;
+}
+
+.map-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.map-hint {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
 }
 
 #map {
@@ -496,6 +604,26 @@ tbody tr:hover {
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
+}
+
+/* Clustered map markers */
+.cluster-marker {
+  background: transparent;
+  border: none;
+}
+
+.cluster-marker .cluster-badge {
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: #fff;
+  border-radius: 9999px;
+  min-width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
+  border: 2px solid #fff;
 }
 
 /* Venue Detail */

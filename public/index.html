@@ -29,6 +29,9 @@
                         <i class="fas fa-moon"></i>
                     </button>
                 </nav>
+                <div class="header-meta">
+                    <span id="headerLastUpdated" class="last-updated-chip compact">Last updated: --</span>
+                </div>
             </div>
         </div>
     </header>
@@ -72,7 +75,11 @@
                         <option value="others">Others</option>
                     </select>
                     <input type="number" class="filter-select" id="distanceFilter" placeholder="Max distance (km)" style="width: 150px;">
-                    <button class="btn btn-secondary btn-sm" onclick="getCurrentLocation()">Use My Location</button>
+                    <button class="btn btn-secondary btn-sm" onclick="getCurrentLocation(event)">Use My Location</button>
+                </div>
+                <div class="table-meta">
+                    <span id="lastUpdatedBadge" class="last-updated-chip">Last updated: --</span>
+                    <span class="hint-text">Tip: click column headers to sort or filter by your distance.</span>
                 </div>
                 <div id="venuesLoading" class="loading">Loading venues...</div>
                 <table id="venuesTable" class="hidden">
@@ -98,6 +105,10 @@
         <!-- Map Page -->
         <div id="mapPage" class="page">
             <div class="map-container">
+                <div class="map-toolbar">
+                    <div id="mapLastUpdated" class="last-updated-chip">Last updated: --</div>
+                    <div class="map-hint">Numbered markers show how many venues share that location.</div>
+                </div>
                 <div id="map">Loading map...</div>
             </div>
         </div>
