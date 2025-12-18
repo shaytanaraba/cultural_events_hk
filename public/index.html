@@ -37,37 +37,56 @@
     <main class="container">
         <!-- Login Page -->
         <div id="loginPage" class="page active">
-            <div class="login-shell">
-                <div class="login-showcase">
-                    <p class="eyebrow">Plan your next outing</p>
-                    <h1>Discover cultural events across Hong Kong</h1>
-                    <p class="lede">Browse venues, favorite upcoming performances, and manage events with a clean, modern dashboard.</p>
-                    <ul class="benefits">
-                        <li><i class="fas fa-location-dot"></i> Explore venues by area or on the map</li>
-                        <li><i class="fas fa-heart"></i> Save favorites and share with friends</li>
-                        <li><i class="fas fa-shield-alt"></i> Admin tools for curating events</li>
-                    </ul>
+            <div class="login-container">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" id="loginTab" type="button">Login</button>
+                    <button class="auth-tab" id="signupTab" type="button">Sign Up</button>
                 </div>
-                <div class="login-panel">
-                    <form class="login-form" id="loginForm">
-                        <h2>Welcome to Cultural Events HK</h2>
-                        <div id="loginError" class="error-message hidden"></div>
-                        <div class="form-group">
-                            <label for="loginUsername">Username</label>
-                            <input type="text" id="loginUsername" name="username" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="password">Password</label>
-                            <input type="password" id="password" name="password" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block">Login</button>
-                        <div class="mt-3 text-center demo-creds">
-                            <p>Demo Users</p>
-                            <p><strong>User:</strong> user / user123</p>
-                            <p><strong>Admin:</strong> admin / admin123</p>
-                        </div>
-                    </form>
-                </div>
+
+                <form class="login-form" id="loginForm">
+                    <h2>Welcome to Cultural Events HK</h2>
+                    <div id="loginError" class="error-message hidden"></div>
+                    <div class="form-group">
+                        <label for="loginUsername">Username</label>
+                        <input type="text" id="loginUsername" name="username" autocomplete="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" autocomplete="current-password" required>
+                    </div>
+                    <div class="form-group form-check-inline">
+                        <input type="checkbox" id="rememberMe"> <label for="rememberMe">Remember me on this device</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Login</button>
+                    <div class="mt-3 text-center">
+                        <p>Demo Users:</p>
+                        <p><strong>User:</strong> user / user123</p>
+                        <p><strong>Admin:</strong> admin / admin123</p>
+                    </div>
+                </form>
+
+                <form class="login-form hidden" id="signupForm">
+                    <h2>Create your account</h2>
+                    <div id="signupError" class="error-message hidden"></div>
+                    <div id="signupSuccess" class="success-message hidden"></div>
+                    <div class="form-group">
+                        <label for="signupUsername">Username</label>
+                        <input type="text" id="signupUsername" name="username" autocomplete="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signupPassword">Password</label>
+                        <input type="password" id="signupPassword" name="password" autocomplete="new-password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signupConfirmPassword">Confirm password</label>
+                        <input type="password" id="signupConfirmPassword" autocomplete="new-password" required>
+                    </div>
+                    <p class="text-secondary" style="font-size: 0.95rem;">New accounts are regular users. Admins can promote accounts later if needed.</p>
+                    <button type="submit" class="btn btn-success btn-block">Create account</button>
+                    <div class="mt-3 text-center">
+                        <p class="text-secondary">Already have an account? <button type="button" class="link-button" id="backToLogin">Return to login</button></p>
+                    </div>
+                </form>
             </div>
         </div>
 
@@ -194,6 +213,17 @@
                         <input type="text" id="editEventTitle" required>
                     </div>
                     <div class="form-group">
+                        <label>Venue</label>
+                        <div class="input-toggle">
+                            <label class="form-check-inline" for="editUseVenueDropdown">
+                                <input type="checkbox" id="editUseVenueDropdown" checked> Choose from venues list
+                            </label>
+                            <small class="text-secondary">Switch off if you need to paste a venue code.</small>
+                        </div>
+                        <select id="editEventVenueSelect" class="hidden"></select>
+                        <input type="text" id="editEventVenueId" class="hidden" placeholder="Venue ID (e.g., 102)">
+                    </div>
+                    <div class="form-group">
                         <label>Date/Time</label>
                         <input type="text" id="editEventDate" required>
                     </div>
@@ -215,20 +245,27 @@
                 <form id="createEventForm" onsubmit="submitNewEvent(event)">
                     <div class="form-group">
                         <label>Event Title</label>
-                        <input type="text" id="newEvTitle" required>
+                        <input type="text" id="newEvTitle" placeholder="e.g., Jazz Night" required>
                     </div>
                     <div class="form-group">
-                        <label>Venue (ID)</label>
-                        <!-- Simple Input for ID or Select dropdown if you populate it -->
-                        <input type="text" id="newEvVenueId" placeholder="Enter Venue ID (e.g., 102)" required>
+                        <label>Venue</label>
+                        <div class="input-toggle">
+                            <label class="form-check-inline" for="useVenueDropdown">
+                                <input type="checkbox" id="useVenueDropdown" checked> Choose from venues list
+                            </label>
+                            <small class="text-secondary">Toggle off to enter a venue code manually.</small>
+                        </div>
+                        <select id="newEvVenueSelect" class="hidden"></select>
+                        <input type="text" id="newEvVenueId" placeholder="Enter Venue ID (e.g., 102)" class="hidden">
                     </div>
                     <div class="form-group">
                         <label>Date/Time</label>
-                        <input type="text" id="newEvDate" placeholder="e.g., 30/01/2026(Fri) 20:00" required>
+                        <input type="text" id="newEvDate" placeholder="30/01/2026(Fri) 20:00" required>
+                        <small class="text-secondary">Supports multiple lines for multi-day events.</small>
                     </div>
                     <div class="form-group">
                         <label>Description</label>
-                        <textarea id="newEvDesc" rows="3"></textarea>
+                        <textarea id="newEvDesc" rows="3" placeholder="Add a short blurb for admins and attendees"></textarea>
                     </div>
                     <div class="flex gap-2 justify-center">
                         <button type="submit" class="btn btn-success">Create</button>
