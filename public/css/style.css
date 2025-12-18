@@ -219,11 +219,70 @@ main {
 }
 
 /* Login Form */
-.login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.login-shell {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: stretch;
+  gap: 2rem;
   min-height: calc(100vh - 80px);
+  padding: 2rem;
+  background: radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.08), transparent 35%),
+              radial-gradient(circle at 80% 0%, rgba(124, 58, 237, 0.1), transparent 30%);
+  border-radius: var(--radius-xl);
+}
+
+.login-showcase {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(124, 58, 237, 0.12));
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  border-radius: var(--radius-xl);
+  padding: 2.25rem;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.login-showcase h1 {
+  font-size: clamp(1.75rem, 2vw, 2.25rem);
+  line-height: 1.2;
+}
+
+.login-showcase .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--primary-color);
+  font-size: 0.9rem;
+}
+
+.login-showcase .lede {
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+.benefits {
+  list-style: none;
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+}
+
+.benefits li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.benefits i {
+  color: var(--secondary-color);
+}
+
+.login-panel {
+  display: flex;
+  align-items: center;
 }
 
 .login-form {
@@ -232,13 +291,22 @@ main {
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
+  margin: 0 auto;
 }
 
 .login-form h2 {
   margin-bottom: 1.5rem;
   text-align: center;
   color: var(--primary-color);
+}
+
+.demo-creds {
+  background: var(--bg-primary);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  color: var(--text-secondary);
 }
 
 .form-group {
