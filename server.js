@@ -163,7 +163,7 @@ app.get('/api/health', async (req, res) => {
 // Authentication
 app.post('/api/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, rememberMe } = req.body;
     const user = await User.findOne({ username });
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
@@ -174,6 +174,13 @@ app.post('/api/login', async (req, res) => {
     req.session.userId = user._id;
     req.session.username = user.username;
     req.session.isAdmin = user.isAdmin;
+
+    if (rememberMe) {
+      req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30; // 30 days
+    } else {
+      req.session.cookie.expires = false;
+      req.session.cookie.maxAge = null;
+    }
 
     // Import once per login session
     const now = new Date();
@@ -217,6 +224,30 @@ app.post('/api/login', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+app.post('/api/register', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const existing = await User.findOne({ username });
+    if (existing) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({ username, password: hashedPassword, isAdmin: false });
+    await user.save();
+
+    res.status(201).json({ message: 'User registered successfully' });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Failed to register user' });
   }
 });
 
@@ -486,8 +517,21 @@ app.post('/api/admin/events', isAdmin, async (req, res) => {
 
 app.put('/api/admin/events/:id', isAdmin, async (req, res) => {
   try {
-    const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(event);
+    const existing = await Event.findById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    const updated = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true });
+
+    if (req.body.venue && req.body.venue.toString() !== existing.venue?.toString()) {
+      if (existing.venue) {
+        await Venue.findByIdAndUpdate(existing.venue, { $pull: { events: existing._id } });
+      }
+      await Venue.findByIdAndUpdate(req.body.venue, { $addToSet: { events: existing._id } });
+    }
+
+    res.json(updated);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update event' });
   }
