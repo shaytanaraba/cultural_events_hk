@@ -8,10 +8,13 @@ let venues = [];
 let currentVenue = null;
 let userLocation = null;
 let sortOrder = { field: 'name', ascending: true };
+let adminVenuesCache = [];
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
     initializeTheme();
+    restoreRememberedUser();
+    setupAuthTabs();
     checkAuthStatus();
     setupEventListeners();
     loadAndRenderLastUpdated();
@@ -55,6 +58,39 @@ function toggleTheme() {
 function updateThemeIcon(theme) {
     const icon = document.querySelector('#themeToggle i');
     icon.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+}
+
+function setupAuthTabs() {
+    switchAuthTab('login');
+}
+
+function switchAuthTab(target) {
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+    const loginTab = document.getElementById('loginTab');
+    const signupTab = document.getElementById('signupTab');
+
+    if (target === 'signup') {
+        signupForm.classList.remove('hidden');
+        loginForm.classList.add('hidden');
+        signupTab.classList.add('active');
+        loginTab.classList.remove('active');
+    } else {
+        loginForm.classList.remove('hidden');
+        signupForm.classList.add('hidden');
+        loginTab.classList.add('active');
+        signupTab.classList.remove('active');
+    }
+}
+
+function restoreRememberedUser() {
+    const saved = localStorage.getItem('rememberedUser');
+    if (saved) {
+        const input = document.getElementById('loginUsername');
+        const checkbox = document.getElementById('rememberMe');
+        if (input) input.value = saved;
+        if (checkbox) checkbox.checked = true;
+    }
 }
 
 // Authentication
@@ -153,6 +189,20 @@ function setupEventListeners() {
         login();
     });
 
+    // Signup form
+    document.getElementById('signupForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        signup();
+    });
+
+    document.getElementById('backToLogin').addEventListener('click', () => switchAuthTab('login'));
+    document.getElementById('loginTab').addEventListener('click', () => switchAuthTab('login'));
+    document.getElementById('signupTab').addEventListener('click', () => switchAuthTab('signup'));
+
+    // Venue selectors toggle
+    document.getElementById('useVenueDropdown').addEventListener('change', toggleCreateVenueInput);
+    document.getElementById('editUseVenueDropdown').addEventListener('change', toggleEditVenueInput);
+
     // Existing filters...
     document.getElementById('venueSearch').addEventListener('input', filterVenues);
     document.getElementById('areaFilter').addEventListener('change', filterVenues);
@@ -164,18 +214,25 @@ function setupEventListeners() {
 function login() {
     const username = document.getElementById('loginUsername').value;
     const password = document.getElementById('password').value;
+    const rememberMe = document.getElementById('rememberMe').checked;
     const errorDiv = document.getElementById('loginError');
-    
+
     fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password, rememberMe })
     })
     .then(response => response.json())
     .then(data => {
         if (data.message) {
             // Build UI and hide login
             showUserInterface(data.user);
+
+            if (rememberMe) {
+                localStorage.setItem('rememberedUser', username);
+            } else {
+                localStorage.removeItem('rememberedUser');
+            }
 
             // Force navigation to Venues (ignore existing hash)
             showPage('venues');
@@ -190,6 +247,47 @@ function login() {
     .catch(error => {
         console.error('Login error:', error);
         errorDiv.textContent = 'Login failed. Please try again.';
+        errorDiv.classList.remove('hidden');
+    });
+}
+
+function signup() {
+    const username = document.getElementById('signupUsername').value.trim();
+    const password = document.getElementById('signupPassword').value;
+    const confirm = document.getElementById('signupConfirmPassword').value;
+    const errorDiv = document.getElementById('signupError');
+    const successDiv = document.getElementById('signupSuccess');
+
+    errorDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+
+    if (password !== confirm) {
+        errorDiv.textContent = 'Passwords do not match.';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+
+    fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            errorDiv.textContent = data.error;
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        successDiv.textContent = 'Account created! You can log in now.';
+        successDiv.classList.remove('hidden');
+        document.getElementById('signupForm').reset();
+        switchAuthTab('login');
+        document.getElementById('loginUsername').value = username;
+    })
+    .catch(() => {
+        errorDiv.textContent = 'Sign up failed. Please try again.';
         errorDiv.classList.remove('hidden');
     });
 }
@@ -338,7 +436,11 @@ function displayVenues(venuesToDisplay) {
 }
 
 function showCreateEventModal() {
-    document.getElementById('createEventModal').classList.remove('hidden');
+    toggleCreateVenueInput();
+    ensureAdminVenues().then(() => {
+        populateVenueSelect('newEvVenueSelect');
+        document.getElementById('createEventModal').classList.remove('hidden');
+    });
 }
 
 // RENAMED: avoid conflict with document.createEvent
@@ -348,10 +450,12 @@ function submitNewEvent(e) {
     const title = document.getElementById('newEvTitle').value.trim();
     const dateTime = document.getElementById('newEvDate').value.trim(); // e.g. 30/01/2026(Fri)20:00\n31/01/2026(Sat)15:00
     const description = document.getElementById('newEvDesc').value.trim();
+    const venueDropdown = document.getElementById('useVenueDropdown').checked;
+    const venueSelectValue = document.getElementById('newEvVenueSelect').value;
     const venueIdInput = document.getElementById('newEvVenueId').value.trim(); // LCSD venueId
 
-    if (!title || !dateTime || !venueIdInput) {
-        showToast('Please fill in Title, Date/Time and Venue ID', 'error');
+    if (!title || !dateTime || (!venueDropdown && !venueIdInput)) {
+        showToast('Please fill in Title, Date/Time and Venue', 'error');
         return;
     }
 
@@ -363,14 +467,18 @@ function submitNewEvent(e) {
         return;
     }
 
-    // Find Venue by LCSD venueId => get Mongo _id
-    fetch('/api/venues')
-      .then(res => res.json())
-      .then(venuesList => {
-        const venue = venuesList.find(v => String(v.venueId) === String(venueIdInput));
+    const venuePromise = ensureAdminVenues().then(list => {
+        if (venueDropdown) {
+            return list.find(v => v._id === venueSelectValue);
+        }
+        return list.find(v => String(v.venueId) === String(venueIdInput));
+    });
+
+    venuePromise
+      .then(venue => {
         if (!venue || !venue._id) {
-          showToast('Venue ID not found. Use a valid LCSD venueId from the Venues list.', 'error');
-          throw new Error('Venue not found');
+            showToast('Venue not found. Pick one from the list or use a valid code.', 'error');
+            throw new Error('Venue not found');
         }
 
         const payload = {
@@ -1153,14 +1261,19 @@ function deleteEvent(eventId) {
 }
 
 function editEvent(eventId) {
-    fetch(`/api/events/${eventId}`)
+    ensureAdminVenues()
+        .then(() => fetch(`/api/events/${eventId}`))
         .then(res => res.json())
         .then(event => {
             document.getElementById('editEventId').value = event._id;
             document.getElementById('editEventTitle').value = event.title;
             document.getElementById('editEventDate').value = event.dateTime;
             document.getElementById('editEventDesc').value = event.description;
-            
+
+            populateVenueSelect('editEventVenueSelect', event.venue?._id);
+            document.getElementById('editUseVenueDropdown').checked = true;
+            toggleEditVenueInput();
+
             document.getElementById('editEventModal').classList.remove('hidden');
         });
 }
@@ -1171,19 +1284,38 @@ function updateEvent(event) {
     const title = document.getElementById('editEventTitle').value;
     const dateTime = document.getElementById('editEventDate').value;
     const description = document.getElementById('editEventDesc').value;
+    const useDropdown = document.getElementById('editUseVenueDropdown').checked;
+    const selectedVenueId = document.getElementById('editEventVenueSelect').value;
+    const manualVenueId = document.getElementById('editEventVenueId').value.trim();
 
-    fetch(`/api/admin/events/${eventId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, dateTime, description })
-    })
-    .then(res => res.json())
-    .then(() => {
+    const venuePromise = ensureAdminVenues().then(list => {
+        if (useDropdown) return list.find(v => v._id === selectedVenueId);
+        return list.find(v => String(v.venueId) === String(manualVenueId));
+    });
+
+    venuePromise
+      .then(venue => {
+        if (!venue || !venue._id) {
+            showToast('Please select a venue from the list or provide a valid code.', 'error');
+            throw new Error('Venue missing');
+        }
+
+        return fetch(`/api/admin/events/${eventId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, dateTime, description, venue: venue._id })
+        });
+      })
+      .then(res => res.json())
+      .then(() => {
         closeModal('editEventModal');
         showToast('Event updated successfully', 'success');
         loadEvents(); // Real-time refresh
-    })
-    .catch(err => showToast('Update failed', 'error'));
+      })
+      .catch(err => {
+        console.error(err);
+        showToast('Update failed', 'error');
+      });
 }
 
 // Helper to close modals
@@ -1214,6 +1346,51 @@ function importData() {
 
 function loadAdminData() {
     loadUsers();
+}
+
+// Admin helpers
+function ensureAdminVenues() {
+    if (adminVenuesCache.length > 0) return Promise.resolve(adminVenuesCache);
+
+    return fetch('/api/venues')
+        .then(res => res.json())
+        .then(list => {
+            adminVenuesCache = list;
+            return adminVenuesCache;
+        })
+        .catch(err => {
+            console.error('Failed to load venues', err);
+            showToast('Unable to load venues list', 'error');
+            return [];
+        });
+}
+
+function populateVenueSelect(selectId, selectedId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Select a venue...</option>';
+    adminVenuesCache.forEach(v => {
+        const option = document.createElement('option');
+        option.value = v._id;
+        option.textContent = `${v.name || 'Unnamed'} (Code: ${v.venueId})`;
+        if (selectedId && selectedId === v._id) option.selected = true;
+        select.appendChild(option);
+    });
+
+    select.classList.remove('hidden');
+}
+
+function toggleCreateVenueInput() {
+    const useDropdown = document.getElementById('useVenueDropdown').checked;
+    document.getElementById('newEvVenueSelect').classList.toggle('hidden', !useDropdown);
+    document.getElementById('newEvVenueId').classList.toggle('hidden', useDropdown);
+}
+
+function toggleEditVenueInput() {
+    const useDropdown = document.getElementById('editUseVenueDropdown').checked;
+    document.getElementById('editEventVenueSelect').classList.toggle('hidden', !useDropdown);
+    document.getElementById('editEventVenueId').classList.toggle('hidden', useDropdown);
 }
 
 // Utility functions
