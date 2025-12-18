@@ -10,6 +10,7 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/cultural_events';
 
 // Middleware
 app.use(cors());
@@ -23,7 +24,7 @@ app.use(session({
 }));
 
 // MongoDB Connection
-mongoose.connect('mongodb://localhost:27017/cultural_events');
+mongoose.connect(MONGO_URI);
 
 // Data Models
 const User = mongoose.model('User', {
@@ -127,6 +128,37 @@ function isAdmin(req, res, next) {
 }
 
 // API Routes
+
+app.get('/api/health', async (req, res) => {
+  const stateMap = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+
+  const connectionState = mongoose.connection.readyState;
+  const health = {
+    status: connectionState === 1 ? 'ok' : 'degraded',
+    dbState: stateMap[connectionState] || 'unknown',
+    uptimeSeconds: process.uptime()
+  };
+
+  try {
+    if (mongoose.connection?.db) {
+      const start = Date.now();
+      await mongoose.connection.db.admin().ping();
+      health.dbLatencyMs = Date.now() - start;
+    } else {
+      health.dbMessage = 'Database connection not ready';
+    }
+  } catch (error) {
+    health.status = 'degraded';
+    health.dbError = error.message;
+  }
+
+  res.json(health);
+});
 
 // Authentication
 app.post('/api/login', async (req, res) => {
@@ -738,6 +770,11 @@ async function initializeDatabase() {
     console.error('Database initialization error:', error);
   }
 }
+
+// Handle unknown API routes
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
 
 // Serve the main HTML file for all routes (SPA)
 app.get('*', (req, res) => {
