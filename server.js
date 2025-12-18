@@ -195,10 +195,11 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/session', (req, res) => {
   if (req.session.userId) {
-    res.json({ 
-      loggedIn: true, 
-      username: req.session.username, 
-      isAdmin: req.session.isAdmin 
+    res.json({
+      loggedIn: true,
+      userId: req.session.userId,
+      username: req.session.username,
+      isAdmin: req.session.isAdmin
     });
   } else {
     res.json({ loggedIn: false });
